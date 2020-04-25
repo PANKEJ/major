@@ -1,0 +1,110 @@
+{% extends 'base.html' %} {% block body %}
+
+<div class="container">
+    {% if VoteList|length ==0 %}
+        <h2>No Results available!!</h2>
+    {% else %}
+        <left>
+            <h3>Select Election</h3>
+        </left>
+        <select class="custom-select" id="inputGroupSelect01" name="party_name">
+            <option selected>{{ Election.ElectionName }}</option>
+            {% for election in VoteList %}
+            {% if  election.ElectionName!=Election.ElectionName %}
+            <option value="{{ election.ElectionName }}">{{ election.ElectionName }}</option>
+            {% endif %}
+            {% endfor %}
+        </select>
+        {% if Election.IsOpen %}
+            <h2>Election Still in Progress!!</h2> 
+            <br>
+            <center style="padding:10px;font-size:20px;">Wait For Results!!</center>
+        {% else %}
+            <h2>Election Closed!!</h2>
+            <center style="padding:10px;font-size:20px;">Here are the Results!!</center>
+            <canvas id="myChart" width="975px" height="532px"></canvas><br><br>
+        {% endif %}
+        
+    {% endif %}
+</div>
+
+<script>
+    jQuery(function($) {
+        $('select').on('change', function() {
+            var url = $(this).val();
+            if (url) {
+                window.location = "/results/"+ url;
+            }
+            return false;
+        });
+    });
+    var ctx = document.getElementById('myChart');
+    var myChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['BJP', 'Congress', 'JDU', 'CPM', 'AAP', 'Shiv Sena'],
+            datasets: [{
+                label: '# of Votes',
+                {% if Listing %}
+                data: [
+                {% if Listing.BJP and Listing.BJP!=0 %}
+                {{ Listing.BJP }}
+                {% else  %}
+                0
+                {% endif %},
+
+                {% if Listing.Congress and Listing.Congress!=0 %}
+                {{ Listing.Congress }}
+                {% else  %}
+                0
+                {% endif %},
+
+                {% if Listing.JDU and Listing.JDU!=0 %}
+                {{ Listing.JDU }}
+                {% else  %}
+                0
+                {% endif %},
+
+                {% if Listing.CPM and Listing.CPM!=0 %}
+                {{ Listing.CPM }}
+                {% else  %}
+                0
+                {% endif %},
+
+                {% if Listing.AAP and Listing.AAP!=0 %}
+                {{ Listing.AAP }}
+                {% else  %}
+                0
+                {% endif %},
+                {% if Listing.ShivSena and Listing.ShivSena!=0 %}
+                {{ Listing.ShivSena }}
+                {% else  %}
+                0
+                {% endif %}
+                ]
+                {% else %}
+                    data:[12, 19, 3, 5, 2, 3]
+                {% endif %}
+                ,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.5)',
+                    'rgba(54, 162, 235, 0.5)',
+                    'rgba(255, 206, 86, 0.5)',
+                    'rgba(75, 192, 192, 0.5)',
+                    'rgba(153, 102, 255, 0.5)',
+                    'rgba(255, 159, 64, 0.5)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+    });
+</script>
+{% endblock%}
