@@ -1,6 +1,7 @@
 ﻿amqp==2.5.2
 astroid==2.3.3
 autopep8==1.5.1
+Babel==2.8.0
 billiard==3.6.3.0
 celery==4.4.2
 certifi==2019.11.28
@@ -8,6 +9,7 @@ chardet==3.0.4
 Click==7.0
 colorama==0.4.3
 Flask==1.1.1
+Flask-Babel==1.0.0
 Flask-SQLAlchemy==2.4.1
 gunicorn==19.9.0
 idna==2.9

@@ -10,20 +10,49 @@ Create Election
 
             <div class="signin-form">
                 <h2 class="form-title">Create Election</h2>
-                <form method="POST" class="register-form" id="login-form" action="{{url_for('createElection')}}">
-                    <div class="input-group input-group-sm mb-3">
+                <form method="POST" class="register-form" id="CreateElection" action="{{url_for('createElection')}}">
+                    <button type="button" class="btn btn-primary" style="margin-bottom:2px;padding:3px;" id="AddCand">Add Candidate</button>
+                    <button type="button" class="btn btn-primary" style="margin-bottom:2px;padding:3px;"
+                        id="remLastCand">Remove Last </button>
+                    <div class="input-group input-group-sm mb-1">
                         <div class="input-group-prepend">
                             <span class="input-group-text" id="inputGroup-sizing-sm">Election Name</span>
                         </div>
                         <input type="text" class="form-control" name="ElectionName" aria-label="Small"
-                            aria-describedby="inputGroup-sizing-sm">
+                            aria-describedby="inputGroup-sizing-sm" required aria-required="false">
                     </div>
-                    <div class="input-group input-group-sm mb-3">
+                    <span class="form-error" id="ElectionName"></span>
+                    {% for error in  form.ElectionName.errors %}
+                        <span class="form-error">{{ error }}</span>
+                    {% endfor %}
+                    <div class="input-group input-group-sm mb-1">
                         <div class="input-group-prepend">
                             <span class="input-group-text" id="inputGroup-sizing-sm">Initial Mac</span>
                         </div>
                         <input type="text" class="form-control" name="InitialMac" aria-label="Small"
-                            aria-describedby="inputGroup-sizing-sm">
+                            aria-describedby="inputGroup-sizing-sm" required aria-required="false">
+                    </div>
+                    <span class="form-error" id="InitialMac"></span>
+                    {% for error in  form.InitialMac.errors %}
+                        <span class="form-error">{{ error }}</span>
+                    {% endfor %}
+                    <div id="candidates">
+                        <div class="input-group input-group-sm mb-1">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text" id="inputGroup-sizing-sm">Candidte 1</span>
+                            </div>
+                            <input type="text" class="form-control" name="Candidate-1" id="candidate1" aria-label="Small"
+                                aria-describedby="inputGroup-sizing-sm" required aria-required="flase">
+                        </div>
+                        <span id="candidate1error" class="form-error"></span>
+                        <div class="input-group input-group-sm mb-1">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text" id="inputGroup-sizing-sm">Candidte 2</span>
+                            </div>
+                            <input type="text" class="form-control" name="Candidate-2" id="candidate2"
+                                aria-label="Small"
+                                aria-describedby="inputGroup-sizing-sm" required aria-required="flase">
+                        </div>
                     </div>
 
                     <div class="form-group form-button ">
@@ -36,5 +65,38 @@ Create Election
         </div>
     </div>
 </section>
+<script>
+    var addcand=document.getElementById("AddCand");
+    var remcand=document.getElementById("remLastCand");
+    var form=document.getElementById("CreateElection")
+    var candidates=document.getElementById("candidates").getElementsByClassName("input-group input-group-sm mb-1");
+    var count=2;
+    
+    addcand.addEventListener("click",()=>{
+        count+=1;
+        var dummy='<div class="input-group input-group-sm mb-1">\
+            <div class="input-group-prepend">\
+                <span class="input-group-text" id="inputGroup-sizing-sm">Candidte '+count+'</span>\
+            </div>\
+            <input type="text" class="form-control" name="Candidate-'+count+'" id="candidate'+count+'"\
+                aria-label="Small" \
+                aria-describedby="inputGroup-sizing-sm" required aria-required="flase">\
+        </div>'
+        console.log("clicked");
+        document.getElementById('candidates').insertAdjacentHTML("beforeend", dummy);
+    });
+    remcand.addEventListener("click",()=>{
+        console.log("removed");
+        var inputs=candidates;
+        if(inputs.length > 2){
+            inputs[inputs.length-1].parentElement.removeChild(inputs[inputs.length-1]);
+            count-=1;
+        }else{
+            alert("Can't Remove!!\nMinimun Candidates Reached !!")
+        }
+        
+    });
+
+</script>
 
 {% endblock %}

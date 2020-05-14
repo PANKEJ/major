@@ -31,8 +31,8 @@ dictConfig({
 app = Flask(__name__)
 
 ######################################### CONFIGRATION OF DATABSE ######################################
-# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://postgres:subh261096@localhost:5432/postgres'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://nbjddnrtflahdi:52ab741ca2a00fa065058f7613581c5f5e8bac12f49500d4248c42ca7ef59337@ec2-18-215-99-63.compute-1.amazonaws.com:5432/d2iimlldlcqt7j'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://postgres:password@localhost:5432/major'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 app.config['SECRET_KEY'] = 'subh261096'
 db = SQLAlchemy(app)
@@ -54,7 +54,7 @@ class Users(db.Model):
                     ########################### END #########################   
 
 
-                    ######################### USER LIST ###################
+                    ############################### END ##########################
 class Elections(db.Model):
     __tablename__ = 'Elections'
     ElectionName = db.Column(db.String(30), primary_key=True)
@@ -63,7 +63,11 @@ class Elections(db.Model):
     IsOpen= db.Column(db.Boolean,default=False)
     Elections = db.relationship('VotingList', cascade="all,delete", backref='Elections')
                     ############################### END ##########################
-
+class CandidateList(db.Model):
+    __tablename__ = 'CandidateList'
+    ElectionName=db.Column(db.String(30),db.ForeignKey('Elections.ElectionName'),primary_key=True)
+    CandidateList = db.Column(db.Text)
+                    ############################### END ##########################
 class VotingList(db.Model):
     __tablename__ = 'VotingList'
     ElectionName=db.Column(db.String(30),db.ForeignKey('Elections.ElectionName'),primary_key=True)
@@ -89,6 +93,17 @@ class RegistrationForm(Form):
     password = PasswordField('Password', [validators.DataRequired()])
     confirm = PasswordField('Confirm Password',[validators.EqualTo('password',
                                                             message="Passwords must match")])
+######################################### END #######################################################
+
+######################################### CREATEELECTION FORM #########################################
+
+
+class CreateElectionForm(Form):
+    ElectionName = TextField(
+        'ElectionName', [validators.DataRequired(), validators.Length(min=4, max=20)])
+    InitialMac = TextField(
+        "InitialMac", [validators.DataRequired(), validators.Length(min=8, max=16)])
+    
 ######################################### END #######################################################
 
 def CloseElection():
@@ -120,7 +135,7 @@ def is_admin(f):
         if 'IsAdmin' in session:
             return f(*args, **kwargs)
         else:
-            flash('Only Admin is Allowed !!, Please Login as Admin First!', 'danger')
+            flash('Only Admin is Allowed !! Please Login as Admin First!', 'danger')
             return redirect(url_for('Adminlogin'))
     return wrap
 ######################################### END #######################################################
@@ -137,8 +152,10 @@ def already_logged_in(f):
     return wrap
 
 
-######################################### SIGN UP #####################################################
+######################################### SIGN UP ####################################################
+
 @app.route('/signup', methods=['POST', 'GET'])
+@is_admin
 def signup():
     form = RegistrationForm(request.form)
 
@@ -192,6 +209,7 @@ def login():
                 # setting session timeout
                 app.permanent_session_lifetime = timedelta(minutes=5)
                 session['logged_in'] = True
+                session['IsAdmin'] = False
                 session['uid'] = data_model.VoterId
                 session['UserName'] = data_model.UserName
                 flash("Welcome %s!" % (data_model.UserName),"success")
@@ -253,20 +271,34 @@ def logout():
 @app.route('/createElection',methods=['GET','POST'])
 @is_admin
 def createElection():
-    if request.method == "POST":
-        ElectionName = request.form['ElectionName']
-        InitialMac = request.form['InitialMac']
+    form=CreateElectionForm(request.form)
+    
+    if request.method == "POST" and form.validate():
+        candList=[]
+        for key in request.form.to_dict():
+            if key.startswith("Candidate-"):
+                candList.append(request.form[key])
+        ElectionName = form.ElectionName.data
+        InitialMac = form.InitialMac.data
         if (Elections.query.filter_by(ElectionName=ElectionName).count() != 0):
             flash("This Election name is already present!! Please Add Current Year in Election Name !!", "danger")
             return render_template("CreateElection.html")
+        elif len(candList) < 2:
+            flash(
+                "Something Went Wrong!! Please Enter Proper Candidate Names", "info")
+            return render_template("CreateElection.html",form=form)
         else:
             data_model = Elections(ElectionName=ElectionName,IsOpen=True)
             vote_model = VotingList(ElectionName=ElectionName, VoterId=(ElectionName+"Admin"), PartyName="None",MacCount=0, PrevMac="None", NewMac=InitialMac)
+            candlist_model = CandidateList(ElectionName=ElectionName, CandidateList="|".join(candList))
             save_to_database = db.session
             try:
                 save_to_database.add(data_model)
-                save_to_database.add(vote_model)
                 save_to_database.commit()
+                save_to_database.add(vote_model)
+                save_to_database.add(candlist_model)
+                save_to_database.commit()
+                
                 flash('Election Created Successfully!',"success")
                 return redirect(url_for('home'))
             except Exception as e:
@@ -274,7 +306,7 @@ def createElection():
                 save_to_database.flush()
                 print(e)
                 flash("Can't Create Rights Now!, please try again Later..","info")
-    return render_template("CreateElection.html")
+    return render_template("CreateElection.html",form=form)
 ######################################### END ###########################################################
 
 #################################### CREATE ELECTION ####################################################
@@ -284,7 +316,6 @@ def endElection():
     if request.method == "POST":
         ElectionName = request.form.get("party_name")
         data_model = Elections.query.get(ElectionName)
-        print(data_model)
         save_to_database = db.session
         try:
             data_model.IsOpen = False
@@ -300,10 +331,85 @@ def endElection():
     return render_template("EndElection.html",ElectionList=Elections.query.filter_by(IsOpen=True).all())
 ######################################### END ###########################################################
 
+############################################### AUDIT ######################################################
+@app.route('/audit' , methods=['GET' ,'POST'])
+@is_logged_in
+def audit():
+    if request.method == 'POST':
+        ElectionName = request.form.get("party_name")
+        if (VotingList.query.filter_by(ElectionName=ElectionName , VoterId=session['uid']).count()==0):
+            flash("No Vote Found","danger")
+        else:
+            data_model = VotingList.query.filter_by(ElectionName=ElectionName , VoterId=session['uid']).first()
+            print("#########################")
+            print(data_model)
+            return render_template("AuditVote.html",VoteData=data_model)
+            # prevmac = data_model.PrevMac
+            # party = data_model.PartyName
+            # #print("hello"+str(data_model.PartyName))
+            # genMac = hashfunction(str(party+session['uid']), prevmac)
+            # Newmac = data_model.NewMac
+            # if genMac == Newmac:
+            #     flash("Vote Casted Verified")
+    return render_template("audit.html",ElectionList=Elections.query.filter_by(IsOpen=False).all())
+################################################ END ########################################################
+
+########################################## Verify Elections ############################################################
+@app.route('/audit_full', methods=['GET','POST'])
+@is_logged_in
+def audit_full():
+    if request.method == 'POST':
+        ElectionName = request.form.get("party_name")
+        if (VotingList.query.filter_by(ElectionName=ElectionName , VoterId=session['uid']).count()==0):
+            flash("NO Vote Found","danger")
+        else:
+            data_model = VotingList.query.filter_by(ElectionName=ElectionName).order_by("MacCount").all()
+            return render_template("AuditElection.html",VoteData=data_model,ElectionName=ElectionName)
+    return render_template("audit_full.html",ElectionList=Elections.query.filter_by(IsOpen=False).all())
+
+@app.route('/verfiyElection/<ElectionName>',methods=['POST'])
+@is_logged_in
+def verifyElection(ElectionName):
+    VoteList = VotingList.query.filter_by(ElectionName=ElectionName).order_by("MacCount").all()
+    tempNewMac=VoteList[0].NewMac
+    for votes in VoteList[1:]:
+        if(tempNewMac == votes.PrevMac):
+            tempNewMac = hashfunction(str(votes.PartyName+votes.VoterId), votes.PrevMac)
+        else:
+            print("Voting modified for "+votes.VoterId)
+    #If Verified            
+    if(tempNewMac == votes.NewMac):
+        flash("Verified the Votings For Whole ELection!!","success")
+        return render_template("audit.html", ElectionList=Elections.query.filter_by(IsOpen=False).all())
+    else: #Not Verified
+        flash("Voting List have been Altered!!","danger")
+        return render_template("audit.html", ElectionList=Elections.query.filter_by(IsOpen=False).all())
+    return render_template("audit.html",ElectionList=Elections.query.filter_by(IsOpen=False).all())
+
+
+#################################################### END #########################################################
+
+############################################### Verify Vote ######################################################
+@app.route('/verifyvote/<ElectionName>/<voterId>',methods=["POST"])
+@is_logged_in
+def verifyvote(ElectionName,voterId):
+    data_model = VotingList.query.filter_by(
+        ElectionName=ElectionName, VoterId=voterId).first()
+    prevmac = data_model.PrevMac
+    party = data_model.PartyName
+    genMac = hashfunction(str(party+session['uid']), prevmac)
+    Newmac = data_model.NewMac
+    if genMac == Newmac:
+        flash("Vote Casted Verified","success")
+        return render_template("audit.html", ElectionList=Elections.query.filter_by(IsOpen=False).all())
+    else:
+        flash("Issue Verifying!! Contact Admin!!","danger")
+        return render_template("audit.html", ElectionList=Elections.query.filter_by(IsOpen=False).all())
+################################################ END ########################################################
+
 @app.route('/')
 def home():
     return render_template("home.html", ElectionList=Elections.query.all(), ActiveElection=Elections.query.filter_by(IsOpen=True).all())
-
 
 @app.route('/ElectionList')
 @is_logged_in
@@ -314,41 +420,74 @@ def ElectionList():
 @is_logged_in
 def CastVote(ElectionName):
     if(VotingList.query.filter_by(ElectionName=ElectionName, VoterId=session['uid']).count() == 0):
-        return render_template("CastVote.html", ElectionName=ElectionName)
+        candlist=CandidateList.query.filter_by(ElectionName=ElectionName).first()
+        return render_template("CastVote.html", ElectionName=ElectionName, candidateList=candlist.CandidateList.split("|"))
     else:
-        flash("Vote Already submitted for"+str(ElectionName),"info")
+        flash("Vote Already submitted for "+str(ElectionName),"info")
         return redirect(url_for("ElectionList"))
 
+
+############################################### SUBMIT VOTE ################################################################
 @app.route('/submit_vote/<ElectionName>',methods=['GET','POST'])
 @is_logged_in
 def submit_vote(ElectionName):
     party=request.form.get("party_name")
-    prevMac = party+session['uid']
-    newMac = hashfunction(str(party+session['uid']),prevMac)
-    last_model = VotingList.query.filter_by(ElectionName=ElectionName)[-1] # getting latest record
-    new_model = VotingList(ElectionName=ElectionName, PartyName=party,MacCount=(last_model.MacCount+1),
-                        VoterId=session["uid"], PrevMac=last_model.NewMac, NewMac=newMac)
-    save_to_database=db.session
-    try:
-        save_to_database.add(new_model)
-        save_to_database.commit()
-        flash('Vote Submitted Successfully!', "success")
-        return redirect(url_for('home'))
-    except Exception as e:
-        save_to_database.rollback()
-        save_to_database.flush()
-        print(e)
-        flash("Can't End Election Now!, please try again Later..","info")
+    VoteList = VotingList.query.filter_by(
+        ElectionName=ElectionName).order_by("MacCount").all()
+    last_model = VoteList[-1]  # getting latest record
     
+    new_model = VotingList(
+                        ElectionName=ElectionName, 
+                        PartyName=party,
+                        MacCount=(last_model.MacCount+1),
+                        VoterId=session["uid"],
+                        PrevMac=last_model.NewMac, 
+                        NewMac=hashfunction(str(party+session['uid']), last_model.NewMac)
+                        )
+    
+    #Verification of votings
+    if(len(VoteList)==1):
+        if(last_model.NewMac==new_model.PrevMac):
+            tempNewMac = hashfunction(str(new_model.PartyName+new_model.VoterId), new_model.PrevMac)
+        else:
+            print("Voting modified for "+new_model.VoterId)
+    else:
+        tempNewMac=VoteList[0].NewMac
+        for votes in VoteList[1:]:
+            if(tempNewMac == votes.PrevMac):
+                tempNewMac = hashfunction(str(votes.PartyName+votes.VoterId), votes.PrevMac)
+            else:
+                print("Voting modified for "+votes.VoterId)
+        if(tempNewMac == new_model.PrevMac):
+            tempNewMac = hashfunction(str(new_model.PartyName+new_model.VoterId), new_model.PrevMac)
+    #If Verified            
+    if(tempNewMac == new_model.NewMac):
+        print("Verified the Votings")
+        save_to_database=db.session
+        try:
+            save_to_database.add(new_model)
+            save_to_database.commit()
+            flash('Votings Verified and Vote Submitted Successfully!', "success")
+            return redirect(url_for('home'))
+        except Exception as e:
+            save_to_database.rollback()
+            save_to_database.flush()
+            print(e)
+            flash("Can't End Election Now!, please try again Later..","info")
+    else: #Not Verified
+        flash("Voting List have been Altered!!","danger")
+        return redirect(url_for("ElectionList"))
     return redirect(url_for("ElectionList"))
+
+############################################# END ######################################################################
+
+
 
 @app.route('/results')
 @app.route('/results/<Election>')
 @is_logged_in
-def results(Election='Choose'):
-    if(Election == 'Choose'):
-        return render_template("results.html", VoteList=Elections.query.all(), Election=Elections.query.first())
-    else:
+def results(Election=False):
+    if(Election):
         objects = VotingList.query.filter_by(ElectionName=Election).all()
         party = {}
         for object in objects:
@@ -357,8 +496,12 @@ def results(Election='Choose'):
             else:
                 party[object.PartyName] = 1
         party.pop("None")
-        print(party)
+        print(len(party))
         return render_template("results.html", VoteList=Elections.query.all(), Election=Elections.query.filter_by(ElectionName=Election).first(), Listing=party)
+    else:
+        return render_template("results.html", VoteList=Elections.query.all(), Election=Elections.query.first())
+
+
 
 if __name__ == '__main__':
     db.create_all()
